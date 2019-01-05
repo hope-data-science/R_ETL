@@ -1,0 +1,108 @@
+
+# R与Spark的连接：Sparklyr简介
+
+Spark是是专为大规模数据处理而设计的快速通用的计算引擎，它是一套软件框架，专门针对大数据处理。为什么要学习Spark？对于数据科学家而言，Spark只是一个工具，我们大可绕过Hadoop生态系统和RDD之类的基本概念识，直截了当地回答：成本低、速度快。也就是企业里面的数据很多是利用分布式架构存储的，可以连接多个低性能的设备来快速存储、调度和计算，而能够实现这些功能的软件框架，就是Spark。  
+那么如果要在大规模数据集中进行探索性数据分析，怎么办？目前很多企业招聘的要求都是大家会Spark，但是会Spark是个什么概念呢？是要会Scala？要能够开发Spark程序？对于数据科学家而言，显然不是。我们要专注的就是，公司目前存在什么问题？如何量化这些问题？如何进行预测？结果如何解释？如果推广模型？至于底层的问题，不用特别深究。如果能够让R与Spark对接，可以大大提高数据科学家在解决大数据问题的工作效率，让数据科学家专注业务和数据支撑的实务，更好地解决如何为企业提供价值的根本问题。  
+因此，本章会介绍如何在R中调用Spark。我们使用了Rstudio开发的Sparklyr包，它是目前R与Spark连接的最优秀的解决方案之一，而且它还一直在发展的进程中。在笔者写这本书的时候，它已经来到0.9.2版本，具体信息可以参考官网：https://spark.rstudio.com/  
+
+![](https://ss.csdn.net/p?https://mmbiz.qpic.cn/mmbiz_png/y2fhgP4leThI15ttjkXbEFQRmkzicUmv2stSGuPkb2wHk8aZ8OWHMCwNZ1mH2cQs2khWCfib9zet3U32cbTqu39Q/640?wx_fmt=png)
+
+最最重要的是，使用Sparklyr包对大集群的海量数据进行操作的时候，可以用到我们在本书前面用到的几乎所有操作。也就是说，Sparklyr能够让我们用最简洁的方式对海量数据进行快速处理。下面，本章将会示范如何在R中通过Sparklyr调用Spark。我们会保证代码能够在单机运行，供大家学习，如果有条件的话也可以在大型分布式架构中进行尝试。  
+
+## 环境配置
+尽管这个应用本身是为企业级应用设计的，但是针对个人初学者，对Sparklyr的学习有两种方案提供选择：1.找到一个网上的云平台，如果平台上已经部署有Spark架构，可以直接进行学习,例如Databricks,网址为<https://databricks.com/>。不过云平台一般都是付费的，如果有免费的，加载包和环境可能会比较缓慢。2.在自己的单机中进行本地的操作。如果计算机已经安装好Spark了，那么就可能比较顺利了；如果没有，也没关系，Sparklyr中可以全自动安装，不过这样的话计算机应该安装有相应版本的Java。有的同学已经有了Java，整个过程就无比顺畅；有的同学什么也没有，可能要多花一点时间。下面我们会演示如何配置环境，尽管等待下载的时间可能比较久，但是操作是极其简便的：  
+
+```{r,eval=FALSE}
+library(pacman)
+p_load(sparklyr)
+spark_install()
+```
+
+## 连接集群
+一步连接本地Spark集群，并对其命名为sc。
+```{r}
+spark_connect(master = "local") -> sc
+```
+
+## 把数据导入集群 
+我们会使用dplyr的copy_to函数来导入数据，我们导入先前章节用过的flights数据，不过在此之前我们先载入tidyverse和nycflights13。
+
+```{r}
+p_load(tidyverse,nycflights13)
+
+sc %>%
+  copy_to(flights) -> fl_sc
+```
+
+## 查看集群中有哪些数据集
+
+```{r}
+src_tbls(sc)
+```
+  
+可以看到，集群中目前只有一个数据集，叫做flights，我们可以再放更多的数据集进去，然后再查看：
+
+```{r}
+sc %>%
+  copy_to(iris) -> iris_sc
+
+src_tbls(sc)
+```
+
+> 需要注意的是，默认把变量的名称作为在集群中的名称，因此如果重复导入同一个变量，是会报错的。如果希望避免这种情况，应该设置overwrite = T，也就是希望把同名的变量覆盖掉。操作如下：
+
+```{r}
+sc %>%
+  copy_to(iris,overwrite =T) -> iris_sc
+```
+
+## 用传统的SQL进行数据操纵
+尽管这是在R环境中，我们依然可以使用SQL语句来对数据进行操作，不过需要加载DBI包，操作如下：
+```{r}
+p_load(DBI)  #加载包
+
+#集群中已经有名为iris的变量，因此可以直接操作 
+iris_preview <- dbGetQuery(sc, "SELECT * FROM iris LIMIT 10")
+
+iris_preview 
+```
+
+## 使用dplyr进行操作
+下面我们对存放在Spark集群的数据，采用我们在本书学到的高效操作来进行查询。为了能够看到相应的SQL代码，我们自这里载入dbplyr包。
+```{r}
+p_load(dbplyr)
+
+iris_sc %>% 
+  group_by(Species) %>%     #根据物种分组
+  summarise(sl.max = max(Sepal_Length,na.rm = T),    #汇总运算，忽略缺失值
+            sw.min = min(Sepal_Width,na.rm = T)) -> iris_result     
+
+#显示结果
+iris_result
+
+#显示对应SQL代码
+iris_result %>%
+  sql_render()
+
+```
+  
+之所以能够对结果直接探究它的SQL代码，就是因为，整个过程采用的是惰性运算。所以iris_result存放的其实不是结果，可以得到结果的过程，只有我们进行请求的时候，它才会显示结果。
+
+## 把Spark中的结果导入到R
+我们要时刻记住，在Spark的数据需要采用sparklyr支持的操作才行，如果想要随心所欲地完成任意操作，需要先把数据从新放在R环境中。目前iris是在R环境中，而iris_sc则是在Spark环境中，要把R环境的数据放到Spark，可以用我们之前提到的copy_to函数；要把Spark运算后得到的结果导入到R中，则需要使用collect函数，下面我们举个例子：
+
+```{r}
+
+iris_sc 
+
+iris_sc %>% collect()
+
+```
+  
+自信观察，我们发现，如果在Spark中，我们是无法直接显示行的数量，因为数据是分布式存储的，所以显示为：“# Source: spark<iris> [?? x 5]”。在Spark中，我们只知道数据有5列，但是导入到R中，我们就可以看到数据是有150行的。
+
+## 小结
+本章我们讲了如何通过sparklyr包连接R与Spark集群，从而使用我们先前学习的高效操作进行数据预处理。我们需要清楚地意识到，哪些数据在Spark集群里面，我们只能用sparklyr支持的函数来操作它们。我们应该尽量把需要对海量数据进行高速处理的操作交给Spark，而把更加精细的可视化、分析操作交给R。我们可以用copy_to和collect两个函数，让数据在R与Spark中互相运输。这样一来，我们就可以在企业级尺度用R语言对数据进行高效的运作。
+
+
+

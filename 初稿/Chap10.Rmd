@@ -1,0 +1,170 @@
+
+# 连接（join）
+
+本章将会介绍如何在R中完成数据表的连接操作。首先要明确一个问题：为什么要进行连接？本质上来说，连接就是按照一定的对应规则，把两个表格合并为一个表格的操作。举个例子：比如我们一张表格中有乐队的歌手名字和他们所属的乐队，另一张表格有歌手的名字和他们擅长的乐器类型。因为两张表格都含有歌手的名字，而歌手的名字也是唯一的（在数据库理论框架中，这个属性被称为主键），即不存在一张表格会重复出现同一个歌手的名字。这个时候，我们就希望把两张表格合并起来，做一张包含歌手名字、所属乐队、擅长乐器的大表格。通过连接，我们能够把众多表格的数据合并起来，从而让孤立的数据能够联系在一起。  
+本章会采用较为简单的数据集进行实现，下面我们会参考dplyr的帮助文档举例，前期准备如下：  
+```{r,message=FALSE}
+library(tidyverse)
+band_members
+band_instruments
+band_instruments2
+```
+   
+观察表格，我们可以知道，band_members包含了歌手名称和乐队信息，band_instruments包含歌手名称和乐器信息，band_instruments2与band_instrument包含的信息一样，但是歌手名称的列名称由name变化为artist。
+
+## 基本概念
+连接分为很多种，包括内连接、全链接、左连接、右连接等。我们先介绍一些基础的逻辑，先看下面这张图：
+![连接的逻辑](G:\College_of_big_data\R_SQL\初稿\sql-joins.png)
+
+下面我们逐个讲解这些连接的概念。
+首先我们来讲内连接，又叫做自然连接。还是歌手、乐队、乐器的例子，比如我们的A表格中有歌手名称和乐队的信息，B表格中有歌手名称和擅长乐器的信息。另外，我们发现两张表格中，A表格包含的歌手信息和B表格不同，有的歌手只有A表格有，B表格就没有；有的歌手只有B表格有，但是A表格没有。但是我们还是希望把A表格和B表格连接起来，形成一个大表格C。采用内连接的话，就会把A表格和B表格都有的歌手提取出来（也就是取了一个交集），然后对两个表格的列进行连接。    
+下面介绍左连接和右连接。如果是A表格左连接B表格的话，那么就是A表格的歌手肯定全部保留，如果在A里面有的歌手，在B中找不到，那么就需要填充缺失值，一切以A表格为主。理解了左连接，右连接就非常简单了，它其实就是左连接的逆运算，也就是说A右连接B，实际就是B左连接A。就是这么简单。
+最后我们讲一下全连接。全连接就是A表格B表格的歌手我们统统都保留，但是如果A表格有的歌手B表格没有，那么在B表格的列中就需要填充缺失值；同理，如果B表格的歌手A没有，那么A表格带来的列也需要填充缺失值。    
+如果还是不理解，可以看一下下面这一张图片。    
+![表格连接举例](G:\College_of_big_data\R_SQL\初稿\join-outer.png){ width=50% }
+  
+## 基本连接实操
+
+### 内连接（inner_join）
+
+```{r}
+band_members %>%
+  inner_join(band_instruments)
+```
+  
+   SQL代码如下：
+```
+<SQL> SELECT `TBL_LEFT`.`name` AS `name`, `TBL_LEFT`.`band` AS `band`, `TBL_RIGHT`.`plays` AS `plays`
+  FROM `band_members` AS `TBL_LEFT`
+  INNER JOIN `band_instruments` AS `TBL_RIGHT`
+  ON (`TBL_LEFT`.`name` = `TBL_RIGHT`.`name`)
+```
+
+> 需要注意的是，如果没有指定根据哪个列（主键）进行合并，那么在连接的时候，函数会自动默认用两个表格都包含的列进行连接。在我们的例子中，因为两个表格都包含名为name的列，因此会根据name来进行连接。如果需要指定用哪些列进行连接，可以更改by参数，例子如下：
+
+```{r}
+band_members %>% 
+  inner_join(band_instruments2, by = c("name" = "artist"))
+```
+  
+这样一来，我们就用band_members的name列与band_instrument2的artist进行了连接。
+
+> 另外一点需要明确的是，合并之后，两个表合并的键只会保留其中一个，也就是第一个表。如果两者的键的名称不一样，也只会保留第一个，比如上面的例子中，我们合并的表格已经没有出现artist这一列，而是统一合并到name这一列中。
+  
+### 左连接
+```{r}
+band_members %>% 
+  left_join(band_instruments)
+```
+  
+  SQL代码如下：
+```
+<SQL> SELECT `TBL_LEFT`.`name` AS `name`, `TBL_LEFT`.`band` AS `band`, `TBL_RIGHT`.`plays` AS `plays`
+  FROM `band_members` AS `TBL_LEFT`
+  LEFT JOIN `band_instruments` AS `TBL_RIGHT`
+  ON (`TBL_LEFT`.`name` = `TBL_RIGHT`.`name`)
+```
+  
+### 右连接
+```{r}
+band_members %>% 
+  right_join(band_instruments)
+```
+  
+  SQL代码如下：
+```
+<SQL> SELECT `TBL_RIGHT`.`name` AS `name`, `TBL_LEFT`.`band` AS `band`, `TBL_RIGHT`.`plays` AS `plays`
+  FROM `band_members` AS `TBL_LEFT`
+  RIGHT JOIN `band_instruments` AS `TBL_RIGHT`
+  ON (`TBL_LEFT`.`name` = `TBL_RIGHT`.`name`)
+```
+### 全连接
+```{r}
+band_members %>% 
+  full_join(band_instruments)
+```
+
+  SQL代码如下：
+```
+<SQL> SELECT coalesce(`TBL_LEFT`.`name`, `TBL_RIGHT`.`name`) AS `name`, `TBL_LEFT`.`band` AS `band`, `TBL_RIGHT`.`plays` AS `plays`
+  FROM `band_members` AS `TBL_LEFT`
+  FULL JOIN `band_instruments` AS `TBL_RIGHT`
+  ON (`TBL_LEFT`.`name` = `TBL_RIGHT`.`name`)
+```
+
+大家可以通过观察结果来体会不同连接的效果。
+
+> 如果两个表格中用相同名字的列怎么办？连接函数会自动给同名列加入后缀，比如A表格和B表格都有一列名为same，那么合并之后，会出现两列，名字分别为same.x和same.y。后缀名是可以变更的，你可以通过suffix参数对后缀名进行设置。
+
+
+## 基于多个列进行连接
+有时候我们不仅仅需要基于单列连接，而且要用到基于多个列的连接。比如我们遇到这么一个问题：我们两个表格都有年、月、日的数据，我们需要把两个表格按照日期对应起来，那么就需要年月日都对的上号才能够进行连接。下面我们来举个例子，我们先构造两个表：
+
+```{r}
+d1 <- tibble(
+  x = letters[4:6],
+  y = LETTERS[4:6],
+  a = rnorm(3)
+  )
+
+d2 <- tibble(
+  x2 = letters[6:4],
+  y2 = LETTERS[6:4],
+  b = rnorm(3)
+  )
+
+d1
+d2
+
+```
+  
+下面我们要把d1和d2连接起来，根据它们的前两列：
+
+```{r}
+left_join(d1, d2, by = c("x" = "x2", "y" = "y2"))
+```
+  
+> 如果不能够确定两个表格中是否有以及有多少相同的列名称，在连接的时候应该总是指定by参数，来决定两个表格究竟基于什么键进行连接。
+
+事实上，两个表格的连接可以基于无穷多的列，比如年月日就涉及了3列，如果再加上地理位置等信息，就更多了。这也充分告诉我们，连接能够给我们连接数据带来巨大的便利。
+
+## 半连接（semi_join）与反连接（anti_join）
+半连接与反连接在实际工作中相对比较少用，但是这也取决于你的工作内容是什么。首先需要声明的是，半连接和反连接都只会返回“左表”的内容，也就是A表格与B表格进行半连接或反连接的时候，只会返回A表格的信息，不会返回B表格的信息。其中，半连接其实相当于进行了一次内连接，不过，它不会保留B表格的任何内容（也就是没有保留B表格的列）。反连接则与半连接相反，它会匹配在A表格出现而B表格没有出现的键值，比如A表格x列出现了a,b,c，B表格x列出现了b,c,d，那么半连接会保留A表格x列出现b,c的记录，反连接则会保留A表格x列出现a的记录。  
+纸上得来终觉浅，我们来进行实际操作：
+
+```{r}
+band_members %>% 
+  semi_join(band_instruments)
+
+band_members %>% 
+  anti_join(band_instruments)
+```
+  
+SQL代码如下：
+
+```
+<SQL> SELECT * FROM `band_members` AS `TBL_LEFT`
+
+WHERE EXISTS (
+  SELECT 1 FROM `band_instruments` AS `TBL_RIGHT`
+  WHERE (`TBL_LEFT`.`name` = `TBL_RIGHT`.`name`)
+)
+
+<SQL> SELECT * FROM `band_members` AS `TBL_LEFT`
+
+WHERE NOT EXISTS (
+  SELECT 1 FROM `band_instruments` AS `TBL_RIGHT`
+  WHERE (`TBL_LEFT`.`name` = `TBL_RIGHT`.`name`)
+)
+```
+
+## 小结
+本章介绍了强大的数据表连接操作，在实际工作中，连接操作的速度是非常快的，效率极高。对于内连接、全连接、左连接、右连接是我们工作中最常用的连接方法，需要牢牢把握。我们还介绍了如何根据多个键值进行连接，并简要介绍了半连接和反连接的概念和操作方法。需要注意的是，当进行复杂连接时，一定要用by参数指定不同表格中用于连接的键，否则容易发生错误。
+
+
+
+
+
+
+
+
