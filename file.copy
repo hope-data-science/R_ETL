@@ -1,0 +1,25 @@
+
+FSlash<- function(path = "clipboard") {
+  y <- if (path == "clipboard") {
+    readClipboard()
+  } else {
+    cat("Please enter the path:\n\n")
+    readline()
+  }
+  x <- chartr("\\", "/", y)
+  writeClipboard(x)
+  return(x)
+}
+
+FSlash() -> NEED
+
+dir(NEED) -> folder_names
+
+dir.create("G:/temp_pdf")
+
+for(i in folder_names){
+  dir(paste0(NEED,"/",i)) -> folder_files
+  if(length(folder_files) == 1) file.copy(from = paste0(NEED,"/",i,"/",folder_files),
+                                          to = paste0("G:/temp_pdf/",folder_files))
+}
+
